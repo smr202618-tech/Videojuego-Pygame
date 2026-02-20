@@ -23,14 +23,14 @@ FPS = 60
 # ======================================================
 def start_main_game_music():
     try:
-        pygame.mixer.music.load('./assets/audio/music1.mp3')
+        #pygame.mixer.music.load('./assets/audio/music1.mp3')
         pygame.mixer.music.play(-1)  # Bucle infinito
     except pygame.error:
         print("Error: No se pudo cargar music1.mp3")
 
 def start_minigame_music():
     try:
-        pygame.mixer.music.load('./assets/audio/music2.mp3')
+        #pygame.mixer.music.load('./assets/audio/music2.mp3')
         pygame.mixer.music.play(-1)  # Bucle infinito
     except pygame.error:
         print("Error: No se pudo cargar music2.mp3")
@@ -488,7 +488,7 @@ def mostrar_game_over():
     nivel = 1
     
     # Detener música al morir si se desea, o dejarla.
-    # pygame.mixer.music.stop() 
+    pygame.mixer.music.stop() 
 
     while True:
         pantalla.fill(NEGRO)
@@ -583,8 +583,6 @@ def mostrar_menu_pausa(jugador):
 
         pygame.display.flip()
         reloj.tick(FPS)
-
-
 # ======================================================
 # BUCLE PRINCIPAL DEL JUEGO
 # ======================================================
@@ -635,7 +633,10 @@ def main():
                 if evento.key == pygame.K_SPACE:
                     juego_iniciado = True
                 if evento.key in (pygame.K_ESCAPE, pygame.K_p) and juego_iniciado:
+                    pygame.mixer.music.stop()
                     decision = mostrar_menu_pausa(jugador)
+                    if decision == "continuar":
+                        start_main_game_music()
                     if decision == "reiniciar":
                         return "reiniciar"
                     if decision == "salir":
