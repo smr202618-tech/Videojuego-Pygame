@@ -84,7 +84,8 @@ estrellas = []
 class Cohete(pygame.sprite.Sprite):
     def __init__(self):
         super().__init__()
-        self.image = pygame.Surface((40, 65), pygame.SRCALPHA)
+        sprite_base = pygame.image.load('./assets/sprites/sprite.png').convert_alpha()
+        self.image = pygame.transform.smoothscale(sprite_base, (40, 65))
         self.rect = self.image.get_rect(center=(ANCHO//2, ALTO - 120))
         self.escudo = False
 
@@ -125,17 +126,7 @@ class Cohete(pygame.sprite.Sprite):
         self.rect.clamp_ip(pantalla.get_rect())
 
     def draw(self, surf):
-        puntos_punta = [
-            (self.rect.centerx, self.rect.top),
-            (self.rect.right - 5, self.rect.top + 25),
-            (self.rect.left + 5, self.rect.top + 25)
-        ]
-        pygame.draw.polygon(surf, ROJO, puntos_punta)
-        pygame.draw.rect(surf, (200, 200, 200),
-                         (self.rect.x + 5, self.rect.y + 25, 30, 30))
-
-        pygame.draw.circle(surf, AZUL,
-                           (self.rect.centerx, self.rect.y + 40), 6)
+        surf.blit(self.image, self.rect)
 
         # Fuego animado mejorado
         for _ in range(5):
