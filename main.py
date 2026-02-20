@@ -60,7 +60,7 @@ CIELO_BAJO = (140, 190, 255)
 CIELO_MEDIO = (90, 145, 235)
 CIELO_ALTO = (60, 100, 200)
 ESPACIO = (5, 5, 20)
-RUTA_GUARDADO = Path('./partida_guardada.json')
+RUTA_GUARDADO = Path('./saves/partida_guardada.json')
 
 
 def cargar_sprites_meteoritos():
@@ -641,8 +641,7 @@ def main():
                         return "reiniciar"
                     if decision == "salir":
                         pygame.quit()
-                        subprocess.Popen([sys.executable, 'menu.py'])
-                        return "salir"
+                        sys.exit()
 
         if juego_iniciado:
             camara_y -= velocidad_global
