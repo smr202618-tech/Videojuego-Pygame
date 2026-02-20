@@ -2,6 +2,7 @@ import pygame
 import sys
 import random
 import math
+from pathlib import Path
 
 # ======================================================
 # CONFIGURACIÓN E INICIALIZACIÓN (NO RECORTADO)
@@ -59,6 +60,39 @@ CIELO_MEDIO = (90, 145, 235)
 CIELO_ALTO = (60, 100, 200)
 ESPACIO = (5, 5, 20)
 
+
+def cargar_sprites_meteoritos():
+    rutas_preferidas = [
+        Path(f"./assets/sprites/meteorito{i}.png") for i in range(1, 5)
+    ]
+    rutas = [ruta for ruta in rutas_preferidas if ruta.exists()]
+
+    if not rutas:
+        rutas = sorted(Path('./assets/sprites').glob('meteorito*.png'))
+
+    if not rutas:
+        rutas = sorted(Path('./assets/sprites').glob('metorito*.png'))
+
+    sprites = []
+    for ruta in rutas:
+        try:
+            sprites.append(pygame.image.load(str(ruta)).convert_alpha())
+        except pygame.error:
+            continue
+
+    return sprites
+
+
+def crear_imagen_meteorito(tamano):
+    if SPRITES_METEORITOS:
+        base = random.choice(SPRITES_METEORITOS)
+        meteorito = pygame.transform.smoothscale(base, (tamano, tamano))
+        return pygame.transform.rotate(meteorito, random.randint(0, 359))
+
+    fallback = pygame.Surface((tamano, tamano), pygame.SRCALPHA)
+    pygame.draw.circle(fallback, NARANJA, (tamano // 2, tamano // 2), tamano // 2)
+    return fallback
+
 # ======================================================
 # VARIABLES DE ESTADO GLOBALES
 # ======================================================
@@ -77,6 +111,7 @@ random.shuffle(pool_minijuegos)
 luna_y = -900
 planetas = []
 estrellas = []
+SPRITES_METEORITOS = cargar_sprites_meteoritos()
 
 # ======================================================
 # CLASE JUGADOR (INERCIA REAL Y MOVIMIENTO COMPLETO)
@@ -84,7 +119,8 @@ estrellas = []
 class Cohete(pygame.sprite.Sprite):
     def __init__(self):
         super().__init__()
-        self.image = pygame.Surface((40, 65), pygame.SRCALPHA)
+        sprite_base = pygame.image.load('./assets/sprites/sprite.png').convert_alpha()
+        self.image = pygame.transform.smoothscale(sprite_base, (40, 65))
         self.rect = self.image.get_rect(center=(ANCHO//2, ALTO - 120))
         self.escudo = False
 
@@ -125,17 +161,7 @@ class Cohete(pygame.sprite.Sprite):
         self.rect.clamp_ip(pantalla.get_rect())
 
     def draw(self, surf):
-        puntos_punta = [
-            (self.rect.centerx, self.rect.top),
-            (self.rect.right - 5, self.rect.top + 25),
-            (self.rect.left + 5, self.rect.top + 25)
-        ]
-        pygame.draw.polygon(surf, ROJO, puntos_punta)
-        pygame.draw.rect(surf, (200, 200, 200),
-                         (self.rect.x + 5, self.rect.y + 25, 30, 30))
-
-        pygame.draw.circle(surf, AZUL,
-                           (self.rect.centerx, self.rect.y + 40), 6)
+        surf.blit(self.image, self.rect)
 
         # Fuego animado mejorado
         for _ in range(5):
@@ -219,8 +245,7 @@ def minijuego_lluvia():
         # Spawn menos agresivo
         if random.randint(1, 8) == 1:
             en = pygame.sprite.Sprite()
-            en.image = pygame.Surface((25, 25))
-            en.image.fill(NARANJA)
+            en.image = crear_imagen_meteorito(25)
             en.rect = en.image.get_rect(
                 center=(random.randint(0, ANCHO), -30))
             enemigos.add(en)
@@ -299,8 +324,7 @@ def minijuego_esquiva():
         # Spawn reducido
         if random.randint(1, 10) == 1:
             en = pygame.sprite.Sprite()
-            en.image = pygame.Surface((35, 35))
-            en.image.fill(ROJO)
+            en.image = crear_imagen_meteorito(35)
             en.rect = en.image.get_rect(
                 center=(random.randint(0, ANCHO), -30))
             enemigos.add(en)
@@ -555,8 +579,7 @@ def main():
             # Generación de obstáculos
             if random.randint(1, 65) == 1:
                 o = pygame.sprite.Sprite(obstaculos)
-                o.image = pygame.Surface((35, 35))
-                o.image.fill(ROJO)
+                o.image = crear_imagen_meteorito(35)
                 o.rect = o.image.get_rect(
                     center=(random.randint(50, ANCHO-50), -30)
                 )
@@ -568,7 +591,7 @@ def main():
                     s.kill()
 
             # Colisiones
-            if pygame.sprite.spritecollide(jugador,坦staculos, False):
+            if pygame.sprite.spritecollide(jugador, obstaculos, False):
                 mostrar_game_over()
 
             if pygame.sprite.spritecollide(jugador, monedas, True):
