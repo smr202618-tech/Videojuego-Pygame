@@ -22,9 +22,9 @@ ROJO_OSCURO = (150, 30, 30)
 
 # Cargar imagen de fondo
 fondo_imagen = None
-ruta_fondo = os.path.join("imagenes", "fondo_menu.png")
+ruta_fondo = os.path.join("assets", "imagenes", "fondo_menu.png")
 if not os.path.exists(ruta_fondo):
-    ruta_fondo = os.path.join("imagenes", "fondo_menu.jpg")
+    ruta_fondo = os.path.join("assets", "imagenes", "fondo_menu.jpg")
 
 try:
     if os.path.exists(ruta_fondo):
@@ -131,3 +131,4 @@ def main_menu():
 
 if __name__ == "__main__":
     main_menu()
+    
