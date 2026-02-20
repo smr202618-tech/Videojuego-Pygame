@@ -1,297 +1,635 @@
 import pygame
-import random
 import sys
-import os
+import random
+import math
 
+# ======================================================
+# CONFIGURACIÓN E INICIALIZACIÓN (NO RECORTADO)
+# ======================================================
 pygame.init()
-pygame.mixer.init()
+pygame.mixer.init()  # Inicializar el mezclador de audio
 
-ANCHO, ALTO = 800, 600
+ANCHO, ALTO = 900, 700
 pantalla = pygame.display.set_mode((ANCHO, ALTO))
-pygame.display.set_caption("Ascenso Infinito")
-
-# ======================
-# COLORES
-# ======================
-BLANCO = (255, 255, 255)
-NEGRO = (0, 0, 0)
-ROJO = (255, 0, 0)
-AZUL = (0, 0, 255)
-VERDE = (0, 255, 0)
-AMARILLO = (255, 215, 0)
-NARANJA = (255, 140, 0)
-NARANJA_OSCURO = (200, 100, 0)
+pygame.display.set_caption("Rocket Ascent: Mega Fusion Gold Edition")
 
 reloj = pygame.time.Clock()
 FPS = 60
 
-# ======================
-# MÚSICA (ruta corregida)
-# ======================
-pygame.mixer.music.set_endevent(pygame.USEREVENT)
+# ======================================================
+# FUNCIONES DE AUDIO
+# ======================================================
+def start_main_game_music():
+    try:
+        pygame.mixer.music.load('./assets/audio/music1.mp3')
+        pygame.mixer.music.play(-1)  # Bucle infinito
+    except pygame.error:
+        print("Error: No se pudo cargar music1.mp3")
 
-playlist = [
-    "./assets/audio/music1.mp3",
-    "./assets/audio/music2.mp3"
-]
+def start_minigame_music():
+    try:
+        pygame.mixer.music.load('./assets/audio/music2.mp3')
+        pygame.mixer.music.play(-1)  # Bucle infinito
+    except pygame.error:
+        print("Error: No se pudo cargar music2.mp3")
 
-current_track = 0
+# ======================================================
+# CONSTANTES DE MUNDO Y FÍSICAS
+# ======================================================
+PIXELS_POR_METRO = 12.5
+VEL_LATERAL = 7
 
-def play_music(index):
-    pygame.mixer.music.load(playlist[index])
-    pygame.mixer.music.play()
+# NUEVA FÍSICA CON INERCIA (NO REEMPLAZA, AMPLÍA)
+ACELERACION = 0.6
+FRICCION = 0.93
+VELOCIDAD_MAX = 8
+GRAVEDAD = 0.25
 
-play_music(current_track)
+# COLORES Y ESTÉTICA
+BLANCO = (255, 255, 255)
+NEGRO = (0, 0, 0)
+ROJO = (220, 50, 50)
+VERDE = (50, 220, 50)
+AZUL = (0, 100, 255)
+AMARILLO = (255, 215, 0)
+NARANJA = (255, 140, 0)
+FUEGO = (255, 170, 60)
+CIELO_BAJO = (140, 190, 255)
+CIELO_MEDIO = (90, 145, 235)
+CIELO_ALTO = (60, 100, 200)
+ESPACIO = (5, 5, 20)
 
-# ======================
-# RECORD
-# ======================
-ARCHIVO_RECORD = "record.txt"
+# ======================================================
+# VARIABLES DE ESTADO GLOBALES
+# ======================================================
+metros = 0
+monedas_totales = 0
+monedas_para_minijuego = 0
+nivel = 1
+velocidad_global = 3.0
+juego_iniciado = False
+camara_y = 0.0
 
-def cargar_record():
-    if os.path.exists(ARCHIVO_RECORD):
-        try:
-            with open(ARCHIVO_RECORD, "r") as f:
-                return int(f.read())
-        except:
-            return 0
-    return 0
+pool_minijuegos = ["lluvia", "laberinto", "esquiva", "verdes", "supervivencia"]
+random.shuffle(pool_minijuegos)
 
-def guardar_record(valor):
-    with open(ARCHIVO_RECORD, "w") as f:
-        f.write(str(valor))
+# NUEVOS ELEMENTOS ESPACIALES
+luna_y = -900
+planetas = []
+estrellas = []
 
-record = cargar_record()
+# ======================================================
+# CLASE JUGADOR (INERCIA REAL Y MOVIMIENTO COMPLETO)
+# ======================================================
+class Cohete(pygame.sprite.Sprite):
+    def __init__(self):
+        super().__init__()
+        self.image = pygame.Surface((40, 65), pygame.SRCALPHA)
+        self.rect = self.image.get_rect(center=(ANCHO//2, ALTO - 120))
+        self.escudo = False
 
-# ======================
-# FONDO
-# ======================
-def obtener_color_fondo(altura):
-    if altura < 1000:
-        return (135, 206, 235)
-    elif altura < 5000:
-        return (200, 200, 200)
-    elif altura < 20000:
-        return (5, 5, 20)
+        # NUEVAS VARIABLES DE VELOCIDAD
+        self.vel_x = 0
+        self.vel_y = 0
+
+    def update(self):
+        teclas = pygame.key.get_pressed()
+
+        # Aceleración horizontal
+        if teclas[pygame.K_LEFT] or teclas[pygame.K_a]:
+            self.vel_x -= ACELERACION
+        if teclas[pygame.K_RIGHT] or teclas[pygame.K_d]:
+            self.vel_x += ACELERACION
+
+        # Vertical SIEMPRE activo (modo normal y minijuego)
+        if teclas[pygame.K_UP] or teclas[pygame.K_w]:
+            self.vel_y -= ACELERACION * 1.4
+        if teclas[pygame.K_DOWN] or teclas[pygame.K_s]:
+            self.vel_y += ACELERACION
+
+        # Gravedad ligera constante
+        self.vel_y += GRAVEDAD
+
+        # Limitar velocidades
+        self.vel_x = max(-VELOCIDAD_MAX, min(VELOCIDAD_MAX, self.vel_x))
+        self.vel_y = max(-VELOCIDAD_MAX, min(VELOCIDAD_MAX, self.vel_y))
+
+        # Aplicar fricción
+        self.vel_x *= FRICCION
+        self.vel_y *= FRICCION
+
+        # Aplicar movimiento
+        self.rect.x += self.vel_x
+        self.rect.y += self.vel_y
+
+        self.rect.clamp_ip(pantalla.get_rect())
+
+    def draw(self, surf):
+        puntos_punta = [
+            (self.rect.centerx, self.rect.top),
+            (self.rect.right - 5, self.rect.top + 25),
+            (self.rect.left + 5, self.rect.top + 25)
+        ]
+        pygame.draw.polygon(surf, ROJO, puntos_punta)
+        pygame.draw.rect(surf, (200, 200, 200),
+                         (self.rect.x + 5, self.rect.y + 25, 30, 30))
+
+        pygame.draw.circle(surf, AZUL,
+                           (self.rect.centerx, self.rect.y + 40), 6)
+
+        # Fuego animado mejorado
+        for _ in range(5):
+            f_x = self.rect.centerx + random.randint(-8, 8)
+            f_y = self.rect.bottom + random.randint(2, 20)
+            pygame.draw.circle(surf, FUEGO,
+                               (f_x, f_y), random.randint(4, 10))
+
+# ======================================================
+# FONDO DINÁMICO CON LUNA, PLANETAS Y PARALLAX
+# ======================================================
+def dibujar_fondo_dinamico():
+    h = abs(camara_y) / PIXELS_POR_METRO
+
+    if h < 150:
+        factor = h / 150
+        color = [int(CIELO_BAJO[i] + (CIELO_MEDIO[i] - CIELO_BAJO[i]) * factor) for i in range(3)]
+    elif h < 400:
+        factor = (h - 150) / 250
+        color = [int(CIELO_MEDIO[i] + (CIELO_ALTO[i] - CIELO_MEDIO[i]) * factor) for i in range(3)]
+    elif h < 800:
+        factor = (h - 400) / 400
+        color = [int(CIELO_ALTO[i] + (ESPACIO[i] - CIELO_ALTO[i]) * factor) for i in range(3)]
     else:
-        return (255, 140, 0)
+        color = ESPACIO
 
-# ======================
-# GAME OVER
-# ======================
-def pantalla_game_over():
-    fuente_grande = pygame.font.Font(None, 90)
-    fuente_peq = pygame.font.Font(None, 40)
+    pantalla.fill(color)
 
-    pantalla.fill(BLANCO)
-    texto = fuente_grande.render("GAME OVER", True, NEGRO)
-    sub = fuente_peq.render("Pulsa cualquier tecla para salir", True, NEGRO)
+    # Estrellas reales generadas una vez
+    if not estrellas:
+        for _ in range(80):
+            estrellas.append((random.randint(0, ANCHO),
+                              random.randint(0, ALTO)))
 
-    pantalla.blit(texto, (ANCHO//2 - texto.get_width()//2, 250))
-    pantalla.blit(sub, (ANCHO//2 - sub.get_width()//2, 350))
-    pygame.display.flip()
+    if h > 250:
+        for ex, ey in estrellas:
+            pygame.draw.circle(
+                pantalla,
+                BLANCO,
+                (ex, int(ey - camara_y * 0.1) % ALTO),
+                1
+            )
 
-    esperando = True
-    while esperando:
+    # Luna
+    pygame.draw.circle(
+        pantalla,
+        (230, 230, 230),
+        (ANCHO - 150, int(luna_y - camara_y * 0.3)),
+        60
+    )
+
+    # Planetas con parallax
+    for planeta in planetas:
+        px = planeta["x"]
+        py = planeta["y"] - camara_y * 0.2
+        pygame.draw.circle(
+            pantalla,
+            planeta["color"],
+            (int(px), int(py)),
+            planeta["radio"]
+        )
+# ======================================================
+# LOS 5 MINIJUEGOS (COMPLETOS Y AJUSTADOS)
+# ======================================================
+
+def minijuego_lluvia():
+    start_minigame_music() # CAMBIO DE MÚSICA
+    p = Cohete()
+    enemigos = pygame.sprite.Group()
+    inicio = pygame.time.get_ticks()
+
+    while pygame.time.get_ticks() - inicio < 8000:
+        reloj.tick(FPS)
+        pantalla.fill((30, 30, 50))
+
         for e in pygame.event.get():
             if e.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
-            if e.type == pygame.KEYDOWN:
-                esperando = False
 
-# ======================
-# CLASES
-# ======================
-class Jugador(pygame.sprite.Sprite):
-    def __init__(self):
-        super().__init__()
-        self.image = pygame.Surface((50, 50))
-        self.image.fill(AZUL)
-        self.rect = self.image.get_rect(center=(ANCHO // 2, ALTO - 120))
-        self.vel_x = 5
-        self.vel_auto = 2
-        self.vel_manual = 4
-        self.vel_bajar = 8
+        # Spawn menos agresivo
+        if random.randint(1, 8) == 1:
+            en = pygame.sprite.Sprite()
+            en.image = pygame.Surface((25, 25))
+            en.image.fill(NARANJA)
+            en.rect = en.image.get_rect(
+                center=(random.randint(0, ANCHO), -30))
+            enemigos.add(en)
 
-    def update(self, velocidad_extra=0):
-        self.rect.y -= (self.vel_auto + velocidad_extra)
+        # Velocidad reducida
+        for en in enemigos:
+            en.rect.y += 6
 
-        teclas = pygame.key.get_pressed()
+        p.update()
 
-        if teclas[pygame.K_w]:
-            self.rect.y -= self.vel_manual
+        if pygame.sprite.spritecollide(p, enemigos, False):
+            start_main_game_music() # RESTAURAR MÚSICA
+            return False
 
-        if teclas[pygame.K_s]:
-            self.rect.y += self.vel_bajar
+        enemigos.draw(pantalla)
+        p.draw(pantalla)
+        pygame.display.flip()
 
-        if teclas[pygame.K_a] and self.rect.left > 0:
-            self.rect.x -= self.vel_x
-
-        if teclas[pygame.K_d] and self.rect.right < ANCHO:
-            self.rect.x += self.vel_x
-
-        if self.rect.top < 40:
-            self.rect.top = 40
-
-        if self.rect.bottom > ALTO:
-            self.rect.bottom = ALTO
+    start_main_game_music() # RESTAURAR MÚSICA
+    return True
 
 
-class Objeto(pygame.sprite.Sprite):
-    def __init__(self, ancho, alto, color):
-        super().__init__()
-        self.image = pygame.Surface((ancho, alto))
-        self.image.fill(color)
-        self.rect = self.image.get_rect(
-            x=random.randint(0, ANCHO - ancho),
-            y=-alto
-        )
-        self.velocidad = 4
+def minijuego_laberinto():
+    start_minigame_music() # CAMBIO DE MÚSICA
+    p = Cohete()
+    p.rect.topleft = (40, 40)
 
-    def update(self):
-        self.rect.y += self.velocidad
-        if self.rect.top > ALTO:
-            self.kill()
+    meta = pygame.Rect(ANCHO-110, ALTO-110, 70, 70)
 
-# ======================
-# GRUPOS
-# ======================
-todos = pygame.sprite.Group()
-rojos = pygame.sprite.Group()
-verdes = pygame.sprite.Group()
-monedas = pygame.sprite.Group()
-frenesis = pygame.sprite.Group()
+    paredes = [
+        pygame.Rect(180, 0, 40, 500),
+        pygame.Rect(420, 200, 40, 500),
+        pygame.Rect(680, 0, 40, 550)
+    ]
 
-jugador = Jugador()
-todos.add(jugador)
+    while not p.rect.colliderect(meta):
+        reloj.tick(FPS)
+        pantalla.fill((10, 10, 15))
 
-altura_total = 0
-enemigos_derrotados = 0
+        for e in pygame.event.get():
+            if e.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
 
-modo_protegido = False
-tiempo_protegido = 0
+        p.update()
 
-modo_frenesi = False
-tiempo_frenesi = 0
+        for pared in paredes:
+            pygame.draw.rect(pantalla, AZUL, pared)
+            if p.rect.colliderect(pared):
+                start_main_game_music() # RESTAURAR MÚSICA
+                return False
 
-contador_spawn = 0
-fuente = pygame.font.Font(None, 30)
-fuente_grande = pygame.font.Font(None, 80)
+        pygame.draw.rect(pantalla, VERDE, meta)
+        p.draw(pantalla)
+        pygame.display.flip()
 
-ejecutando = True
+    start_main_game_music() # RESTAURAR MÚSICA
+    return True
 
-# ======================
-# LOOP
-# ======================
-while ejecutando:
-    reloj.tick(FPS)
 
-    for evento in pygame.event.get():
+def minijuego_esquiva():
+    start_minigame_music() # CAMBIO DE MÚSICA
+    p = Cohete()
+    enemigos = pygame.sprite.Group()
+    inicio = pygame.time.get_ticks()
 
-        # Cambio automático de canción
-        if evento.type == pygame.USEREVENT:
-            current_track = (current_track + 1) % len(playlist)
-            play_music(current_track)
+    while pygame.time.get_ticks() - inicio < 7500:
+        reloj.tick(FPS)
+        pantalla.fill((50, 10, 10))
 
-        if evento.type == pygame.QUIT:
-            ejecutando = False
+        for e in pygame.event.get():
+            if e.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
 
-    # TIMERS
-    if modo_protegido:
-        tiempo_protegido -= 1
-        if tiempo_protegido <= 0:
-            modo_protegido = False
+        # Spawn reducido
+        if random.randint(1, 10) == 1:
+            en = pygame.sprite.Sprite()
+            en.image = pygame.Surface((35, 35))
+            en.image.fill(ROJO)
+            en.rect = en.image.get_rect(
+                center=(random.randint(0, ANCHO), -30))
+            enemigos.add(en)
 
-    if modo_frenesi:
-        tiempo_frenesi -= 1
-        if tiempo_frenesi <= 0:
-            modo_frenesi = False
+        # Velocidad ligeramente menor
+        for en in enemigos:
+            en.rect.y += 8
 
-    # SPAWN
-    contador_spawn += 1
-    limite_spawn = 15 if modo_frenesi else 30
+        p.update()
 
-    if contador_spawn >= limite_spawn:
-        r = random.randint(1, 8)
+        if pygame.sprite.spritecollide(p, enemigos, False):
+            start_main_game_music() # RESTAURAR MÚSICA
+            return False
 
-        if r == 1:
-            m = Objeto(20, 20, AMARILLO)
-            todos.add(m)
-            monedas.add(m)
+        enemigos.draw(pantalla)
+        p.draw(pantalla)
+        pygame.display.flip()
 
-        elif r == 2:
-            f = Objeto(30, 30, NARANJA)
-            todos.add(f)
-            frenesis.add(f)
+    start_main_game_music() # RESTAURAR MÚSICA
+    return True
 
-        elif r <= 5:
-            o = Objeto(50, 50, ROJO)
-            todos.add(o)
-            rojos.add(o)
 
-        else:
-            v = Objeto(40, 40, VERDE)
-            todos.add(v)
-            verdes.add(v)
+def minijuego_verdes():
+    start_minigame_music() # CAMBIO DE MÚSICA
+    p = Cohete()
+    items = pygame.sprite.Group()
+    recolectados = 0
+    fuente = pygame.font.SysFont(None, 40)
 
-        contador_spawn = 0
+    while recolectados < 10:
+        reloj.tick(FPS)
+        pantalla.fill((10, 45, 10))
 
-    velocidad_extra = 2 if modo_frenesi else 0
-    jugador.update(velocidad_extra)
+        for e in pygame.event.get():
+            if e.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
 
-    for sprite in todos:
-        if sprite != jugador:
-            sprite.update()
+        # Spawn menos frecuente
+        if random.randint(1, 20) == 1:
+            it = pygame.sprite.Sprite()
+            it.image = pygame.Surface((25, 25), pygame.SRCALPHA)
+            pygame.draw.circle(it.image, VERDE, (12, 12), 12)
+            it.rect = it.image.get_rect(
+                center=(random.randint(50, ANCHO-50),
+                        random.randint(50, ALTO-50)))
+            items.add(it)
 
-    # ALTURA
-    altura_total += jugador.vel_auto + velocidad_extra
-    if pygame.key.get_pressed()[pygame.K_w]:
-        altura_total += jugador.vel_manual
+        p.update()
 
-    altura = altura_total // 10
+        if pygame.sprite.spritecollide(p, items, True):
+            recolectados += 1
 
-    if altura > record:
-        record = altura
-        guardar_record(record)
+        txt = fuente.render(
+            f"Bio-muestras: {recolectados}/10", True, BLANCO)
 
-    # COLISIONES
-    if pygame.sprite.spritecollide(jugador, monedas, True):
-        modo_protegido = True
-        tiempo_protegido = FPS * 5
+        items.draw(pantalla)
+        p.draw(pantalla)
+        pantalla.blit(txt, (20, 20))
+        pygame.display.flip()
 
-    if pygame.sprite.spritecollide(jugador, frenesis, True):
-        modo_frenesi = True
-        tiempo_frenesi = FPS * 5
+    start_main_game_music() # RESTAURAR MÚSICA
+    return True
 
-    enemigos_derrotados += len(
-        pygame.sprite.spritecollide(jugador, verdes, True)
-    )
 
-    rojos_col = pygame.sprite.spritecollide(jugador, rojos, True)
+def minijuego_supervivencia():
+    start_minigame_music() # CAMBIO DE MÚSICA
+    p = Cohete()
+    drones = pygame.sprite.Group()
+    inicio = pygame.time.get_ticks()
 
-    if rojos_col:
-        if modo_protegido or modo_frenesi:
-            enemigos_derrotados += len(rojos_col)
-        else:
-            pantalla_game_over()
-            pygame.quit()
-            sys.exit()
+    while pygame.time.get_ticks() - inicio < 11000:
+        reloj.tick(FPS)
+        pantalla.fill((5, 5, 5))
 
-    # DIBUJADO
-    if modo_frenesi:
-        pantalla.fill(NARANJA_OSCURO)
-        pygame.draw.rect(pantalla, AMARILLO, (0, 0, ANCHO, ALTO), 10)
-    else:
-        pantalla.fill(obtener_color_fondo(altura))
+        for e in pygame.event.get():
+            if e.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
 
-    todos.draw(pantalla)
+        if random.randint(1, 20) == 1:
+            d = pygame.sprite.Sprite()
+            d.image = pygame.Surface((20, 20))
+            d.image.fill(AMARILLO)
+            d.rect = d.image.get_rect(
+                center=(random.choice([0, ANCHO]),
+                        random.randint(0, ALTO)))
+            drones.add(d)
 
-    pantalla.blit(fuente.render(f"Altura: {altura}", True, NEGRO), (10, 10))
-    pantalla.blit(fuente.render(f"Record: {record}", True, NEGRO), (10, 40))
-    pantalla.blit(fuente.render(f"Enemigos: {enemigos_derrotados}", True, NEGRO), (10, 70))
+        for d in drones:
+            vel = 2.2
 
+            # IA con margen de error
+            if random.random() < 0.85:
+                dx = vel if p.rect.x > d.rect.x else -vel
+                dy = vel if p.rect.y > d.rect.y else -vel
+            else:
+                dx = random.choice([-vel, vel])
+                dy = random.choice([-vel, vel])
+
+            d.rect.x += dx
+            d.rect.y += dy
+
+        p.update()
+
+        if pygame.sprite.spritecollide(p, drones, False):
+            start_main_game_music() # RESTAURAR MÚSICA
+            return False
+
+        drones.draw(pantalla)
+        p.draw(pantalla)
+        pygame.display.flip()
+
+    start_main_game_music() # RESTAURAR MÚSICA
+    return True
+# ======================================================
+# SISTEMA DE EVENTOS Y ALEATORIEDAD (BARAJA)
+# ======================================================
+def activar_evento_aleatorio():
+    global pool_minijuegos, velocidad_global, nivel
+
+    if not pool_minijuegos:
+        pool_minijuegos = ["lluvia", "laberinto", "esquiva", "verdes", "supervivencia"]
+        random.shuffle(pool_minijuegos)
+
+    seleccion = pool_minijuegos.pop()
+
+    # Pantalla de transición
+    pantalla.fill(NEGRO)
+    f = pygame.font.SysFont(None, 80)
+    aviso = f.render(f"¡{seleccion.upper()}!", True, AMARILLO)
+    pantalla.blit(aviso, (ANCHO//2 - aviso.get_width()//2, ALTO//2 - 40))
     pygame.display.flip()
+    pygame.time.delay(1200)
 
-pygame.quit()
-sys.exit()
+    juegos = {
+        "lluvia": minijuego_lluvia,
+        "laberinto": minijuego_laberinto,
+        "esquiva": minijuego_esquiva,
+        "verdes": minijuego_verdes,
+        "supervivencia": minijuego_supervivencia
+    }
+
+    exito = juegos[seleccion]()
+    if exito:
+        nivel += 1
+        velocidad_global += 0.5
+        return True
+    return False
+
+
+# ======================================================
+# LÓGICA DE GAME OVER
+# ======================================================
+def mostrar_game_over():
+    global nivel
+    fuente_g = pygame.font.SysFont(None, 100)
+    fuente_p = pygame.font.SysFont(None, 50)
+    nivel = 1
+    
+    # Detener música al morir si se desea, o dejarla.
+    # pygame.mixer.music.stop() 
+
+    while True:
+        pantalla.fill(NEGRO)
+
+        txt1 = fuente_g.render("MISIÓN FALLIDA", True, ROJO)
+        txt2 = fuente_p.render(f"Altura alcanzada: {int(metros)}m", True, BLANCO)
+        txt3 = fuente_p.render("Pulsa R para reiniciar", True, VERDE)
+
+        pantalla.blit(txt1, (ANCHO//2 - txt1.get_width()//2, 200))
+        pantalla.blit(txt2, (ANCHO//2 - txt2.get_width()//2, 320))
+        pantalla.blit(txt3, (ANCHO//2 - txt3.get_width()//2, 400))
+
+        pygame.display.flip()
+
+        for e in pygame.event.get():
+            if e.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if e.type == pygame.KEYDOWN and e.key == pygame.K_r:
+                main()
+                return
+
+
+# ======================================================
+# BUCLE PRINCIPAL DEL JUEGO
+# ======================================================
+def main():
+    global metros, monedas_totales, monedas_para_minijuego
+    global velocidad_global, juego_iniciado, camara_y
+    global planetas
+
+    # Iniciar música principal
+    start_main_game_music()
+
+    # Reinicio completo de estado
+    metros = 0
+    monedas_totales = 0
+    monedas_para_minijuego = 0
+    velocidad_global = 3.0
+    juego_iniciado = False
+    camara_y = 0.0
+    planetas = []
+
+    # Generar planetas al iniciar partida
+    for _ in range(4):
+        planetas.append({
+            "x": random.randint(100, ANCHO - 100),
+            "y": random.randint(-2500, -400),
+            "radio": random.randint(30, 70),
+            "color": random.choice([
+                (200, 200, 255),
+                (255, 180, 180),
+                (180, 255, 200),
+                (255, 220, 150)
+            ])
+        })
+
+    jugador = Cohete()
+    monedas = pygame.sprite.Group()
+    obstaculos = pygame.sprite.Group()
+
+    while True:
+        reloj.tick(FPS)
+
+        for evento in pygame.event.get():
+            if evento.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+
+            if evento.type == pygame.KEYDOWN:
+                if evento.key == pygame.K_SPACE:
+                    juego_iniciado = True
+
+        if juego_iniciado:
+            camara_y -= velocidad_global
+            metros = abs(camara_y) / PIXELS_POR_METRO
+
+            # Movimiento con nueva física
+            jugador.update()
+
+            # Generación de monedas
+            if random.randint(1, 45) == 1:
+                m = pygame.sprite.Sprite(monedas)
+                m.image = pygame.Surface((20, 20), pygame.SRCALPHA)
+                pygame.draw.circle(m.image, AMARILLO, (10, 10), 10)
+                m.rect = m.image.get_rect(
+                    center=(random.randint(50, ANCHO-50), -30)
+                )
+
+            # Generación de obstáculos
+            if random.randint(1, 65) == 1:
+                o = pygame.sprite.Sprite(obstaculos)
+                o.image = pygame.Surface((35, 35))
+                o.image.fill(ROJO)
+                o.rect = o.image.get_rect(
+                    center=(random.randint(50, ANCHO-50), -30)
+                )
+
+            # Movimiento relativo al ascenso
+            for s in list(monedas) + list(obstaculos):
+                s.rect.y += velocidad_global + 2
+                if s.rect.top > ALTO:
+                    s.kill()
+
+            # Colisiones
+            if pygame.sprite.spritecollide(jugador,坦staculos, False):
+                mostrar_game_over()
+
+            if pygame.sprite.spritecollide(jugador, monedas, True):
+                monedas_totales += 1
+                monedas_para_minijuego += 1
+
+                if monedas_para_minijuego >= 5:
+                    monedas_para_minijuego = 0
+                    if not activar_evento_aleatorio():
+                        mostrar_game_over()
+
+        # RENDERIZADO
+        dibujar_fondo_dinamico()
+
+        suelo_y = (ALTO - 80) - camara_y
+        if suelo_y < ALTO + 100:
+            pygame.draw.rect(
+                pantalla,
+                (100, 100, 100),
+                (ANCHO//2 - 100, suelo_y, 200, 20)
+            )
+            pygame.draw.rect(
+                pantalla,
+                (80, 150, 80),
+                (0, suelo_y + 20, ANCHO, 500)
+            )
+
+        monedas.draw(pantalla)
+        obstaculos.draw(pantalla)
+        jugador.draw(pantalla)
+
+        # HUD
+        f_hud = pygame.font.SysFont(None, 30)
+        c_txt = BLANCO if metros > 300 else NEGRO
+
+        pantalla.blit(
+            f_hud.render(f"ALTURA: {int(metros)}m", True, c_txt),
+            (20, 20)
+        )
+        pantalla.blit(
+            f_hud.render(f"MONEDAS: {monedas_totales}", True, AMARILLO),
+            (20, 50)
+        )
+        pantalla.blit(
+            f_hud.render(f"NIVEL: {nivel}", True, c_txt),
+            (20, 80)
+        )
+
+        if not juego_iniciado:
+            msg = f_hud.render(
+                "PULSA ESPACIO PARA INICIAR EL DESPEGUE",
+                True,
+                NEGRO
+            )
+            pantalla.blit(
+                msg,
+                (ANCHO//2 - msg.get_width()//2, ALTO//2)
+            )
+
+        pygame.display.flip()
+
+
+if __name__ == "__main__":
+    main()
