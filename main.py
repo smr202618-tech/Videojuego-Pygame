@@ -1,7 +1,6 @@
 import pygame
 import sys
 import random
-import math
 from pathlib import Path
 
 # ======================================================
