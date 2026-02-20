@@ -2,6 +2,7 @@ import pygame
 import sys
 import random
 import subprocess
+import json
 from pathlib import Path
 
 # ======================================================
@@ -59,6 +60,7 @@ CIELO_BAJO = (140, 190, 255)
 CIELO_MEDIO = (90, 145, 235)
 CIELO_ALTO = (60, 100, 200)
 ESPACIO = (5, 5, 20)
+RUTA_GUARDADO = Path('./partida_guardada.json')
 
 
 def cargar_sprites_meteoritos():
@@ -511,6 +513,78 @@ def mostrar_game_over():
                 return
 
 
+def guardar_partida(jugador):
+    datos = {
+        "metros": metros,
+        "monedas_totales": monedas_totales,
+        "monedas_para_minijuego": monedas_para_minijuego,
+        "nivel": nivel,
+        "velocidad_global": velocidad_global,
+        "juego_iniciado": juego_iniciado,
+        "camara_y": camara_y,
+        "jugador_x": jugador.rect.x,
+        "jugador_y": jugador.rect.y,
+        "jugador_vel_x": jugador.vel_x,
+        "jugador_vel_y": jugador.vel_y,
+    }
+
+    with RUTA_GUARDADO.open('w', encoding='utf-8') as archivo:
+        json.dump(datos, archivo, indent=2)
+
+
+def mostrar_menu_pausa(jugador):
+    opciones = ["Guardar", "Reiniciar", "Salir"]
+    indice = 0
+    fuente_titulo = pygame.font.SysFont(None, 70)
+    fuente_opcion = pygame.font.SysFont(None, 46)
+    fuente_info = pygame.font.SysFont(None, 34)
+    guardado_ok = False
+
+    while True:
+        for evento in pygame.event.get():
+            if evento.type == pygame.QUIT:
+                return "salir"
+            if evento.type == pygame.KEYDOWN:
+                if evento.key in (pygame.K_ESCAPE, pygame.K_p):
+                    return "continuar"
+                if evento.key in (pygame.K_UP, pygame.K_w):
+                    indice = (indice - 1) % len(opciones)
+                if evento.key in (pygame.K_DOWN, pygame.K_s):
+                    indice = (indice + 1) % len(opciones)
+                if evento.key == pygame.K_RETURN:
+                    seleccion = opciones[indice]
+
+                    if seleccion == "Guardar":
+                        guardar_partida(jugador)
+                        guardado_ok = True
+                    elif seleccion == "Reiniciar":
+                        return "reiniciar"
+                    elif seleccion == "Salir":
+                        return "salir"
+
+        overlay = pygame.Surface((ANCHO, ALTO), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 190))
+        pantalla.blit(overlay, (0, 0))
+
+        titulo = fuente_titulo.render("PAUSA", True, BLANCO)
+        pantalla.blit(titulo, (ANCHO // 2 - titulo.get_width() // 2, 170))
+
+        for i, opcion in enumerate(opciones):
+            color = AMARILLO if i == indice else BLANCO
+            texto = fuente_opcion.render(opcion, True, color)
+            pantalla.blit(texto, (ANCHO // 2 - texto.get_width() // 2, 280 + i * 65))
+
+        ayuda = fuente_info.render("Usa flechas/W-S y Enter. ESC/P para continuar", True, BLANCO)
+        pantalla.blit(ayuda, (ANCHO // 2 - ayuda.get_width() // 2, 520))
+
+        if guardado_ok:
+            msg = fuente_info.render("Partida guardada en partida_guardada.json", True, VERDE)
+            pantalla.blit(msg, (ANCHO // 2 - msg.get_width() // 2, 560))
+
+        pygame.display.flip()
+        reloj.tick(FPS)
+
+
 # ======================================================
 # BUCLE PRINCIPAL DEL JUEGO
 # ======================================================
@@ -560,6 +634,14 @@ def main():
             if evento.type == pygame.KEYDOWN:
                 if evento.key == pygame.K_SPACE:
                     juego_iniciado = True
+                if evento.key in (pygame.K_ESCAPE, pygame.K_p) and juego_iniciado:
+                    decision = mostrar_menu_pausa(jugador)
+                    if decision == "reiniciar":
+                        return "reiniciar"
+                    if decision == "salir":
+                        pygame.quit()
+                        subprocess.Popen([sys.executable, 'menu.py'])
+                        return "salir"
 
         if juego_iniciado:
             camara_y -= velocidad_global
@@ -656,5 +738,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
-
+    while True:
+        estado = main()
+        if estado != "reiniciar":
+            break
