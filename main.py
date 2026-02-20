@@ -245,6 +245,7 @@ def minijuego_lluvia():
         if random.randint(1, 8) == 1:
             en = pygame.sprite.Sprite()
             en.image = crear_imagen_meteorito(45)
+            en.image = crear_imagen_meteorito(25)
             en.rect = en.image.get_rect(
                 center=(random.randint(0, ANCHO), -30))
             enemigos.add(en)
@@ -324,6 +325,7 @@ def minijuego_esquiva():
         if random.randint(1, 10) == 1:
             en = pygame.sprite.Sprite()
             en.image = crear_imagen_meteorito(60)
+            en.image = crear_imagen_meteorito(35)
             en.rect = en.image.get_rect(
                 center=(random.randint(0, ANCHO), -30))
             enemigos.add(en)
@@ -579,6 +581,7 @@ def main():
             if random.randint(1, 65) == 1:
                 o = pygame.sprite.Sprite(obstaculos)
                 o.image = crear_imagen_meteorito(60)
+                o.image = crear_imagen_meteorito(35)
                 o.rect = o.image.get_rect(
                     center=(random.randint(50, ANCHO-50), -30)
                 )
