@@ -244,6 +244,7 @@ def minijuego_lluvia():
         # Spawn menos agresivo
         if random.randint(1, 8) == 1:
             en = pygame.sprite.Sprite()
+            en.image = crear_imagen_meteorito(45)
             en.image = crear_imagen_meteorito(25)
             en.rect = en.image.get_rect(
                 center=(random.randint(0, ANCHO), -30))
@@ -323,6 +324,7 @@ def minijuego_esquiva():
         # Spawn reducido
         if random.randint(1, 10) == 1:
             en = pygame.sprite.Sprite()
+            en.image = crear_imagen_meteorito(60)
             en.image = crear_imagen_meteorito(35)
             en.rect = en.image.get_rect(
                 center=(random.randint(0, ANCHO), -30))
@@ -578,6 +580,7 @@ def main():
             # Generación de obstáculos
             if random.randint(1, 65) == 1:
                 o = pygame.sprite.Sprite(obstaculos)
+                o.image = crear_imagen_meteorito(60)
                 o.image = crear_imagen_meteorito(35)
                 o.rect = o.image.get_rect(
                     center=(random.randint(50, ANCHO-50), -30)
